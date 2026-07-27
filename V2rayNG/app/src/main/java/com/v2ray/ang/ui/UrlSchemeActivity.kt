@@ -10,9 +10,11 @@ import com.v2ray.ang.R
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.AngConfigManager
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.ui.base.BaseComponentActivity
 import com.v2ray.ang.ui.main.MainActivity
 import com.v2ray.ang.util.LogUtil
+import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -23,11 +25,13 @@ class UrlSchemeActivity : BaseComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
+            var handled = false
             intent.apply {
                 if (action == Intent.ACTION_SEND) {
                     if ("text/plain" == type) {
                         intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
                             parseUri(it, null)
+                            handled = true
                         }
                     }
                 } else if (action == Intent.ACTION_VIEW) {
@@ -36,12 +40,14 @@ class UrlSchemeActivity : BaseComponentActivity() {
                             val uri: Uri? = intent.data
                             val shareUrl = uri?.getQueryParameter("url").orEmpty()
                             parseUri(shareUrl, uri?.fragment)
+                            handled = true
                         }
 
                         "install-sub" -> {
                             val uri: Uri? = intent.data
                             val shareUrl = uri?.getQueryParameter("url").orEmpty()
                             parseUri(shareUrl, uri?.fragment)
+                            handled = true
                         }
 
                         else -> {
@@ -51,11 +57,34 @@ class UrlSchemeActivity : BaseComponentActivity() {
                 }
             }
 
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+            if (!handled) {
+                startMainActivity()
+            }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Error processing URL scheme", e)
         }
+    }
+
+    private fun startMainActivity() {
+        startActivity(Intent(this, MainActivity::class.java))
+        finish()
+    }
+
+    /**
+     * Selects the newly imported profile whose remarks match the given name,
+     * so the user can connect right away without picking it manually.
+     *
+     * @param remarks The remarks (fragment) of the imported profile.
+     */
+    private fun selectServerByRemarks(remarks: String?) {
+        if (remarks.isNullOrEmpty()) {
+            return
+        }
+        val guid = MmkvManager.decodeAllServerList()
+            .firstOrNull { MmkvManager.decodeServerConfig(it)?.remarks == remarks }
+            ?: return
+        MmkvManager.setSelectServer(guid)
+        LogUtil.i(AppConfig.TAG, "Selected server by remarks: $remarks -> $guid")
     }
 
     @Composable
@@ -64,26 +93,37 @@ class UrlSchemeActivity : BaseComponentActivity() {
 
     private fun parseUri(uriString: String?, fragment: String?) {
         if (uriString.isNullOrEmpty()) {
+            startMainActivity()
             return
         }
         LogUtil.i(AppConfig.TAG, uriString)
 
         var decodedUrl = URLDecoder.decode(uriString, "UTF-8")
         val uri = Uri.parse(decodedUrl)
-        if (uri != null) {
-            if (uri.fragment.isNullOrEmpty() && !fragment.isNullOrEmpty()) {
-                decodedUrl += "#${fragment}"
+        if (uri == null) {
+            startMainActivity()
+            return
+        }
+
+        if (uri.fragment.isNullOrEmpty() && !fragment.isNullOrEmpty()) {
+            decodedUrl += "#${fragment}"
+        }
+        val remarks = Utils.decodeURIComponent(
+            uri.fragment.orEmpty().ifEmpty { fragment.orEmpty() }
+        )
+        LogUtil.i(AppConfig.TAG, decodedUrl)
+        lifecycleScope.launch(Dispatchers.IO) {
+            val (count, countSub) = AngConfigManager.importBatchConfig(decodedUrl, "", false)
+            if (count > 0) {
+                selectServerByRemarks(remarks)
             }
-            LogUtil.i(AppConfig.TAG, decodedUrl)
-            lifecycleScope.launch(Dispatchers.IO) {
-                val (count, countSub) = AngConfigManager.importBatchConfig(decodedUrl, "", false)
-                withContext(Dispatchers.Main) {
-                    if (count + countSub > 0) {
-                        toast(R.string.import_subscription_success)
-                    } else {
-                        toast(R.string.import_subscription_failure)
-                    }
+            withContext(Dispatchers.Main) {
+                if (count + countSub > 0) {
+                    toast(R.string.import_subscription_success)
+                } else {
+                    toast(R.string.import_subscription_failure)
                 }
+                startMainActivity()
             }
         }
     }
