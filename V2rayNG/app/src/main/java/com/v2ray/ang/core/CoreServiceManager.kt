@@ -116,6 +116,22 @@ object CoreServiceManager {
     fun isRunning() = coreController.isRunning
 
     /**
+     * Measures the delay of the running core against the given URL.
+     * Must be called from the core process.
+     * @param url The URL to test against.
+     * @return The delay in milliseconds, or -1 if the core is not running or the test failed.
+     */
+    fun measureDelay(url: String): Long {
+        if (!coreController.isRunning) return -1
+        return try {
+            coreController.measureDelay(url)
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to measure delay", e)
+            -1
+        }
+    }
+
+    /**
      * Gets the name of the currently running server.
      * @return The name of the running server.
      */

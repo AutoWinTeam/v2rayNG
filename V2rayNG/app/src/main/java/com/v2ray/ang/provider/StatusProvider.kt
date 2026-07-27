@@ -13,6 +13,7 @@ import com.v2ray.ang.AppConfig
 import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.SpeedtestManager
 import com.v2ray.ang.util.LogUtil
 import java.net.HttpURLConnection
 import java.net.URL
@@ -105,11 +106,28 @@ class StatusProvider : ContentProvider() {
         if (probe) {
             val url = SettingsManager.getDelayTestUrl()
             bundle.putString("probe_url", url)
+
+            // The app excludes itself from its own VPN, so this request always leaves
+            // the device outside the tunnel: it tells us the device has internet at all.
             val start = System.currentTimeMillis()
             val code = probeUrl(url)
-            bundle.putInt("probe_code", code)
-            bundle.putLong("probe_latency_ms", System.currentTimeMillis() - start)
-            bundle.putBoolean("probe_ok", code in 200..399)
+            bundle.putInt("direct_code", code)
+            bundle.putLong("direct_latency_ms", System.currentTimeMillis() - start)
+            bundle.putBoolean("direct_ok", code in 200..399)
+
+            // Routing the same request through the running core is what actually proves
+            // the proxy works.
+            if (CoreServiceManager.isRunning()) {
+                val delay = CoreServiceManager.measureDelay(url)
+                bundle.putLong("tunnel_delay_ms", delay)
+                bundle.putBoolean("tunnel_ok", delay >= 0)
+                if (delay >= 0) {
+                    bundle.putString("tunnel_ip", SpeedtestManager.getRemoteIPInfo().orEmpty())
+                }
+            } else {
+                bundle.putBoolean("tunnel_ok", false)
+                bundle.putLong("tunnel_delay_ms", -1)
+            }
         }
 
         return bundle
