@@ -171,6 +171,21 @@
             android:exported="false"
             android:process=":RunSoLibV2RayDaemon"
             android:theme="@style/AppThemeDayNight.NoActionBar.Translucent" />
+        <activity
+            android:name=".ui.shortcut.VpnControlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:process=":RunSoLibV2RayDaemon"
+            android:theme="@style/AppThemeDayNight.NoActionBar.Translucent">
+            <intent-filter>
+                <action android:name="${applicationId}.action.vpn.start" />
+                <action android:name="${applicationId}.action.vpn.stop" />
+                <action android:name="${applicationId}.action.vpn.restart" />
+                <action android:name="${applicationId}.action.vpn.switch" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name=".ui.UrlSchemeActivity"
@@ -337,6 +352,12 @@
             android:name="androidx.work.multiprocess.RemoteWorkManagerService"
             android:exported="false"
             android:process=":bg" />
+
+        <provider
+            android:name=".provider.StatusProvider"
+            android:authorities="${applicationId}.status"
+            android:exported="true"
+            android:process=":RunSoLibV2RayDaemon" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
