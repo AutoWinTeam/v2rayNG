@@ -45,7 +45,8 @@ class ServerSocksActivity : BaseServerActivity() {
         FormTextField(
             stringResource(R.string.server_lab_id4),
             state.password,
-            { state.password = it }
+            { state.password = it },
+            isPassword = true
         )
     }
 }

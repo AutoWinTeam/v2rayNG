@@ -1,14 +1,13 @@
 name: Build APK
 
+# Temporarily paused: only runs when triggered manually.
+# The x86_64 build in build-x86_64.yml is the one running on every push.
 on:
   workflow_dispatch:
     inputs:
       release_tag:
         required: false
         type: string
-  push:
-    branches:
-      - master
 
 permissions:
   contents: write

@@ -6,6 +6,9 @@ on:
     branches:
       - master
 
+permissions:
+  contents: write
+
 jobs:
   build-x86_64:
     runs-on: ubuntu-latest
@@ -16,6 +19,18 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: '0'
+
+    - name: Bump version
+      run: |
+        cd ${{ github.workspace }}/V2rayNG/app
+        BASE_CODE=$(grep -oP 'versionCode = \K[0-9]+' build.gradle.kts)
+        BASE_NAME=$(grep -oP 'versionName = "\K[^"]+' build.gradle.kts)
+        NEW_CODE=$((BASE_CODE + GITHUB_RUN_NUMBER))
+        NEW_NAME="${BASE_NAME}.${GITHUB_RUN_NUMBER}"
+        sed -i "s/versionCode = ${BASE_CODE}/versionCode = ${NEW_CODE}/" build.gradle.kts
+        sed -i "s/versionName = \"${BASE_NAME}\"/versionName = \"${NEW_NAME}\"/" build.gradle.kts
+        echo "Version: $BASE_NAME ($BASE_CODE) -> $NEW_NAME ($NEW_CODE)"
+        echo "APP_VERSION=${NEW_NAME}" >> $GITHUB_ENV
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v4
@@ -79,22 +94,49 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: Build x86_64 debug APK
+    - name: Decode Keystore
+      uses: timheuer/base64-to-file@v2.0.0
+      id: android_keystore
+      with:
+        fileName: "android_keystore.jks"
+        encodedString: ${{ secrets.APP_KEYSTORE_BASE64 }}
+
+    - name: Build x86_64 release APK
       run: |
         cd ${{ github.workspace }}/V2rayNG
         echo "sdk.dir=${ANDROID_HOME}" > local.properties
         chmod 755 gradlew
-        ./gradlew assemblePlaystoreDebug -PABI_FILTERS=x86_64
+        ./gradlew assemblePlaystoreRelease \
+          -PABI_FILTERS=x86_64 \
+          -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} \
+          -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} \
+          -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} \
+          -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
 
-    - name: Rename APK to x86_64.apk
+    - name: Rename APK to moonVPN_x86_64.apk
       run: |
         APK=$(find ${{ github.workspace }}/V2rayNG/app/build/outputs/apk -name '*x86_64*.apk' | head -n 1)
+        if [ -z "$APK" ]; then
+          echo "No x86_64 APK found"
+          exit 1
+        fi
         echo "Found APK: $APK"
         mkdir -p ${{ github.workspace }}/out
-        cp "$APK" ${{ github.workspace }}/out/x86_64.apk
+        cp "$APK" ${{ github.workspace }}/out/moonVPN_x86_64.apk
 
     - name: Upload x86_64 APK
       uses: actions/upload-artifact@v7
       with:
-        name: x86_64-apk
-        path: ${{ github.workspace }}/out/x86_64.apk
+        name: moonVPN-x86_64
+        path: ${{ github.workspace }}/out/moonVPN_x86_64.apk
+
+    - name: Create release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ env.APP_VERSION }}
+        name: moonVPN v${{ env.APP_VERSION }}
+        body: |
+          moonVPN ${{ env.APP_VERSION }} (x86_64, release)
+
+          Commit: ${{ github.sha }}
+        files: ${{ github.workspace }}/out/moonVPN_x86_64.apk

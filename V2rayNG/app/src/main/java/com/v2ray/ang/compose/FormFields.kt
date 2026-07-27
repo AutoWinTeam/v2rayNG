@@ -11,6 +11,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -25,8 +27,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.v2ray.ang.R
 
 @Composable
 fun FormTextField(
@@ -38,7 +44,29 @@ fun FormTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     placeholder: String? = null,
     maxLines: Int = 5,
+    isPassword: Boolean = false,
 ) {
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    val masked = isPassword && !passwordVisible
+    val passwordToggle: (@Composable () -> Unit)? = if (isPassword) {
+        {
+            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                Icon(
+                    painter = painterResource(
+                        if (passwordVisible) {
+                            R.drawable.ic_visibility_off_24dp
+                        } else {
+                            R.drawable.ic_visibility_24dp
+                        }
+                    ),
+                    contentDescription = null
+                )
+            }
+        }
+    } else {
+        null
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -49,10 +77,18 @@ fun FormTextField(
             onValueChange = onValueChange,
             label = { Text(label) },
             placeholder = placeholder?.let { { Text(it) } },
-            singleLine = false,
-            maxLines = maxLines,
+            singleLine = isPassword,
+            maxLines = if (isPassword) 1 else maxLines,
             enabled = enabled,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            visualTransformation = if (masked) {
+                PasswordVisualTransformation()
+            } else {
+                VisualTransformation.None
+            },
+            trailingIcon = passwordToggle,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (isPassword) KeyboardType.Password else keyboardType
+            ),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
