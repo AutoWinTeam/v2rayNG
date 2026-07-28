@@ -118,15 +118,30 @@ class StatusProvider : ContentProvider() {
             // Routing the same request through the running core is what actually proves
             // the proxy works.
             if (CoreServiceManager.isRunning()) {
-                val delay = CoreServiceManager.measureDelay(url)
+                var (delay, error) = CoreServiceManager.measureDelay(url)
+                if (delay < 0) {
+                    // The primary URL may be blocked; retry once like the in-app test does.
+                    val (retryDelay, retryError) =
+                        CoreServiceManager.measureDelay(SettingsManager.getDelayTestUrl(true))
+                    if (retryDelay >= 0) {
+                        delay = retryDelay
+                        error = ""
+                    } else if (retryError.isNotEmpty()) {
+                        error = retryError
+                    }
+                }
                 bundle.putLong("tunnel_delay_ms", delay)
                 bundle.putBoolean("tunnel_ok", delay >= 0)
+                bundle.putString("tunnel_error", error)
+                bundle.putInt("socks_port", SettingsManager.getSocksPort())
+                bundle.putInt("http_port", SettingsManager.getHttpPort())
                 if (delay >= 0) {
                     bundle.putString("tunnel_ip", SpeedtestManager.getRemoteIPInfo().orEmpty())
                 }
             } else {
                 bundle.putBoolean("tunnel_ok", false)
                 bundle.putLong("tunnel_delay_ms", -1)
+                bundle.putString("tunnel_error", "core not running")
             }
         }
 
